@@ -48,8 +48,10 @@ const createSOSAlert = catchAsync(async (req, res) => {
     },
     medicalInfo: {
       bloodType: user.bloodGroup || null,
-      allergies: user.allergies || [],
-      conditions: user.medicalConditions.map(c => c.condition) || [],
+      allergies: Array.isArray(user.allergies) ? user.allergies : [], // ✅ SAFE CHECK
+      conditions: Array.isArray(user.medicalConditions)
+        ? user.medicalConditions.map(c => c?.condition || c).filter(Boolean)
+        : [], // ✅ SAFE CHECK WITH FILTERING
       insuranceInfo: user.insuranceCompany || null
     }
   });
@@ -121,10 +123,10 @@ const createSOSAlert = catchAsync(async (req, res) => {
 // Get SOS alert details
 const getSOSAlert = catchAsync(async (req, res) => {
   const { sosId } = req.params;
-  
+
   const sosAlert = await SOS.findById(sosId)
     .populate('userId', 'fullName touristId mobileNumber emergencyContactName emergencyContactPhone nationality');
-  
+
   if (!sosAlert) {
     return res.status(404).json(formatError('SOS alert not found', 'SOS_NOT_FOUND'));
   }
@@ -161,7 +163,7 @@ const updateSOSStatus = catchAsync(async (req, res) => {
   const { status, notes, acknowledgedBy, respondingUnits } = req.body;
 
   const sosAlert = await SOS.findById(sosId);
-  
+
   if (!sosAlert) {
     return res.status(404).json(formatError('SOS alert not found', 'SOS_NOT_FOUND'));
   }
@@ -178,8 +180,8 @@ const updateSOSStatus = catchAsync(async (req, res) => {
     case 'RESOLVED':
       await sosAlert.resolve('HELP_ARRIVED', notes);
       // Update user safety status back to SAFE
-      await User.findByIdAndUpdate(sosAlert.userId, { 
-        $set: { safetyStatus: 'SAFE' } 
+      await User.findByIdAndUpdate(sosAlert.userId, {
+        $set: { safetyStatus: 'SAFE' }
       });
       break;
     default:
@@ -215,7 +217,7 @@ const cancelSOSAlert = catchAsync(async (req, res) => {
   const { reason = 'Cancelled by user' } = req.body;
 
   const sosAlert = await SOS.findById(sosId);
-  
+
   if (!sosAlert) {
     return res.status(404).json(formatError('SOS alert not found', 'SOS_NOT_FOUND'));
   }
@@ -232,8 +234,8 @@ const cancelSOSAlert = catchAsync(async (req, res) => {
   await sosAlert.cancel(reason);
 
   // Update user safety status back to SAFE
-  await User.findByIdAndUpdate(req.userId, { 
-    $set: { safetyStatus: 'SAFE' } 
+  await User.findByIdAndUpdate(req.userId, {
+    $set: { safetyStatus: 'SAFE' }
   });
 
   // Emit cancellation via Socket.IO
@@ -260,7 +262,7 @@ const cancelSOSAlert = catchAsync(async (req, res) => {
 // Get SOS history for user
 const getSOSHistory = catchAsync(async (req, res) => {
   const { limit = 10, page = 1 } = req.query;
-  
+
   const sosAlerts = await SOS.find({ userId: req.userId })
     .sort({ createdAt: -1 })
     .limit(parseInt(limit))

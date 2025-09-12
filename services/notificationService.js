@@ -1,126 +1,3 @@
-// // services/notificationService.js
-// const nodemailer = require('nodemailer');
-// const logger = require('../utils/logger');
-
-// // Create email transporter (CORRECTED METHOD NAME)
-// const transporter = nodemailer.createTransport({
-//   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-//   port: process.env.EMAIL_PORT || 587,
-//   secure: false, // true for 465, false for other ports
-//   auth: {
-//     user: process.env.EMAIL_USER,
-//     pass: process.env.EMAIL_PASS
-//   },
-//   tls: {
-//     rejectUnauthorized: false
-//   }
-// });
-
-// // Send emergency notification
-// const sendEmergencyNotification = async (notificationData) => {
-//   try {
-//     const { type, recipient, message, sosId } = notificationData;
-    
-//     if (type === 'EMAIL') {
-//       const mailOptions = {
-//         from: `"Tourist Safety Monitor" <${process.env.EMAIL_USER}>`,
-//         to: recipient,
-//         subject: '🚨 EMERGENCY ALERT - Tourist Safety Monitor',
-//         html: `
-//           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-//             <div style="background-color: #dc3545; color: white; padding: 20px; text-align: center;">
-//               <h1>🚨 EMERGENCY ALERT</h1>
-//             </div>
-//             <div style="padding: 20px; background-color: #f8f9fa;">
-//               <p style="font-size: 16px; line-height: 1.6;">
-//                 ${message}
-//               </p>
-//               <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 5px;">
-//                 <strong>Emergency ID:</strong> ${sosId}<br>
-//                 <strong>Time:</strong> ${new Date().toLocaleString()}<br>
-//                 <strong>Source:</strong> Tourist Safety Monitor System
-//               </div>
-//               <p style="color: #666; font-size: 14px;">
-//                 This is an automated emergency notification. Please respond immediately.
-//               </p>
-//             </div>
-//           </div>
-//         `
-//       };
-
-//       await transporter.sendMail(mailOptions);
-//       logger.info('Emergency email notification sent', { recipient, sosId });
-      
-//       return {
-//         success: true,
-//         method: 'EMAIL',
-//         recipient,
-//         sentAt: new Date()
-//       };
-//     }
-    
-//     // For SMS or other notification types
-//     if (type === 'SMS') {
-//       // For now, we'll log SMS notifications
-//       // In production, integrate with SMS service like Twilio
-//       logger.info('SMS notification would be sent:', { recipient, message, sosId });
-      
-//       return {
-//         success: true,
-//         method: 'SMS', 
-//         recipient,
-//         sentAt: new Date(),
-//         note: 'SMS simulation - integrate with Twilio in production'
-//       };
-//     }
-
-//   } catch (error) {
-//     logger.error('Failed to send emergency notification:', {
-//       error: error.message,
-//       type: notificationData.type,
-//       recipient: notificationData.recipient
-//     });
-    
-//     return {
-//       success: false,
-//       error: error.message,
-//       method: notificationData.type,
-//       recipient: notificationData.recipient
-//     };
-//   }
-// };
-
-// // Send bulk notifications
-// const sendBulkNotifications = async (notifications) => {
-//   const results = [];
-  
-//   for (const notification of notifications) {
-//     const result = await sendEmergencyNotification(notification);
-//     results.push(result);
-//   }
-  
-//   return results;
-// };
-
-// // Verify email transporter configuration
-// const verifyEmailConfig = async () => {
-//   try {
-//     await transporter.verify();
-//     logger.info('Email configuration verified successfully');
-//     return true;
-//   } catch (error) {
-//     logger.error('Email configuration verification failed:', { error: error.message });
-//     return false;
-//   }
-// };
-
-// module.exports = {
-//   sendEmergencyNotification,
-//   sendBulkNotifications,
-//   verifyEmailConfig
-// };
-
-
 const nodemailer = require('nodemailer');
 const logger = require('../utils/logger');
 
@@ -132,6 +9,9 @@ const transporter = nodemailer.createTransport({
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false
   }
 });
 
@@ -192,7 +72,7 @@ const sendOTPEmail = async (email, otp, fullName) => {
   }
 };
 
-// Send welcome email with Tourist ID
+// Send welcome email with Tourist ID (Primary method)
 const sendWelcomeEmail = async (email, fullName, touristId) => {
   try {
     const result = await transporter.sendMail({
@@ -258,9 +138,108 @@ const sendWelcomeEmail = async (email, fullName, touristId) => {
   }
 };
 
+// 🆕 Simple Tourist ID email (Fallback 1)
+const sendSimpleTouristIdEmail = async (email, fullName, touristId) => {
+  try {
+    const result = await transporter.sendMail({
+      from: `"Smart Tourist Safety" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: `Your Tourist ID: ${touristId}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; background: white;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #2563eb; margin: 0;">🛡️ Smart Tourist Safety</h1>
+          </div>
+          
+          <h2 style="color: #333;">Hello ${fullName}!</h2>
+          <p style="color: #666; line-height: 1.6;">
+            Your Smart Tourist Safety registration is complete.
+          </p>
+          
+          <div style="background: #f0f9ff; border: 2px solid #2563eb; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
+            <h3 style="color: #2563eb; margin: 0 0 10px 0;">Your Tourist ID:</h3>
+            <h1 style="color: #1e40af; font-family: monospace; font-size: 24px; margin: 0; letter-spacing: 2px;">${touristId}</h1>
+            <p style="color: #666; margin: 10px 0 0 0; font-size: 14px;"><strong>Save this ID for app login!</strong></p>
+          </div>
+          
+          <div style="background: #dcfce7; padding: 15px; margin: 20px 0; border-radius: 5px;">
+            <p style="color: #166534; margin: 0; font-size: 14px;">
+              ✅ Registration successful<br>
+              📱 Download our app and login with Tourist ID: <strong>${touristId}</strong><br>
+              🛡️ Your safety is now monitored 24/7
+            </p>
+          </div>
+          
+          <p style="color: #666;">
+            Stay Safe!<br>
+            <strong>Smart Tourist Safety Team</strong>
+          </p>
+          
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="color: #999; font-size: 12px; text-align: center;">
+            This is an automated message, please do not reply.
+          </p>
+        </div>
+      `
+    });
+
+    logger.info('Simple Tourist ID email sent successfully:', { 
+      email: email.replace(/(.{2}).*(@.*)/, '$1***$2'),
+      touristId,
+      messageId: result.messageId 
+    });
+
+    return result;
+  } catch (error) {
+    logger.error('Failed to send simple Tourist ID email:', { error: error.message, email });
+    throw error;
+  }
+};
+
+// 🆕 SMS welcome message (Fallback 2)
+const sendWelcomeSMS = async (mobileNumber, fullName, touristId) => {
+  try {
+    // In production, integrate with SMS service like Twilio
+    // For now, we'll simulate and log
+    const message = `Welcome ${fullName}! Your Smart Tourist Safety ID: ${touristId}. Save this for app login. Download app: bit.ly/smart-tourist-app Stay Safe! 🛡️`;
+    
+    logger.info('SMS notification sent (simulated):', { 
+      mobile: mobileNumber.replace(/(\d{2}).*(\d{2})/, '$1****$2'),
+      touristId,
+      message: message.substring(0, 50) + '...'
+    });
+
+    // Simulate successful SMS delivery
+    return {
+      messageId: `SMS_${Date.now()}`,
+      status: 'sent',
+      recipient: mobileNumber,
+      message: message,
+      sentAt: new Date(),
+      service: 'SMS_SIMULATION'
+    };
+
+    /* 
+    // PRODUCTION SMS CODE (Uncomment when ready to integrate Twilio)
+    const twilio = require('twilio');
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    
+    const result = await client.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: mobileNumber
+    });
+    
+    return result;
+    */
+  } catch (error) {
+    logger.error('Failed to send welcome SMS:', { error: error.message, mobile: mobileNumber });
+    throw error;
+  }
+};
+
 // Send emergency notification (existing)
 const sendEmergencyNotification = async ({ type, recipient, message, sosId }) => {
-  // ... existing emergency notification code
   try {
     let result = null;
 
@@ -283,6 +262,9 @@ const sendEmergencyNotification = async ({ type, recipient, message, sosId }) =>
                   <strong>Time:</strong> ${new Date().toLocaleString()}<br>
                   <strong>System:</strong> Smart Tourist Safety Monitor
                 </div>
+                <p style="color: #666; font-size: 12px;">
+                  This is an automated emergency notification. Please respond immediately.
+                </p>
               </div>
             </div>
           `
@@ -290,8 +272,8 @@ const sendEmergencyNotification = async ({ type, recipient, message, sosId }) =>
         break;
 
       case 'SMS':
-        logger.info('SMS notification simulated:', { recipient, sosId });
-        result = { messageId: 'SMS_SIMULATED', status: 'sent' };
+        logger.info('SMS emergency notification simulated:', { recipient, sosId });
+        result = { messageId: 'SMS_EMERGENCY_SIMULATED', status: 'sent' };
         break;
 
       default:
@@ -316,8 +298,23 @@ const sendEmergencyNotification = async ({ type, recipient, message, sosId }) =>
   }
 };
 
+// 🛠️ Verify email configuration
+const verifyEmailConfig = async () => {
+  try {
+    await transporter.verify();
+    logger.info('Email configuration verified successfully');
+    return true;
+  } catch (error) {
+    logger.error('Email configuration verification failed:', { error: error.message });
+    return false;
+  }
+};
+
 module.exports = {
   sendOTPEmail,
   sendWelcomeEmail,
-  sendEmergencyNotification
+  sendSimpleTouristIdEmail,  // 🆕 NEW
+  sendWelcomeSMS,            // 🆕 NEW
+  sendEmergencyNotification,
+  verifyEmailConfig          // 🆕 NEW
 };

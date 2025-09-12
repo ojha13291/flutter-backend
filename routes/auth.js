@@ -105,9 +105,61 @@
 
 // module.exports = router;
 
+// const express = require('express');
+// const router = express.Router();
+// const authController = require('../controllers/authController');
+// const { authenticate } = require('../middleware/auth');
+// const { validateUserRegistration, validateOTPVerification, validateLogin } = require('../middleware/validation');
+
+// // @route   POST /api/auth/register
+// // @desc    Register user and send OTP
+// // @access  Public
+// router.post('/register', validateUserRegistration, authController.register);
+
+// // @route   POST /api/auth/verify-otp
+// // @desc    Verify OTP and assign Tourist ID
+// // @access  Public
+// router.post('/verify-otp', validateOTPVerification, authController.verifyOTP);
+
+// // @route   POST /api/auth/resend-otp
+// // @desc    Resend OTP to email
+// // @access  Public
+// router.post('/resend-otp', authController.resendOTP);
+
+// // @route   POST /api/auth/login
+// // @desc    Login with Tourist ID
+// // @access  Public
+// // Add this route for Tourist ID recovery
+// router.post('/recover-tourist-id', recoverTouristId);
+
+// router.post('/login', validateLogin, authController.login);
+
+// // @route   GET /api/auth/profile
+// // @desc    Get user profile
+// // @access  Private
+// router.get('/profile', authenticate, authController.getProfile);
+
+// // @route   PUT /api/auth/profile
+// // @desc    Update user profile
+// // @access  Private
+// router.put('/profile', authenticate, authController.updateProfile);
+
+// // @route   POST /api/auth/refresh
+// // @desc    Refresh JWT token
+// // @access  Private
+// router.post('/refresh', authenticate, authController.refreshToken);
+
+// // @route   POST /api/auth/logout
+// // @desc    Logout user
+// // @access  Private
+// router.post('/logout', authenticate, authController.logout);
+
+// module.exports = router;
+
+
 const express = require('express');
 const router = express.Router();
-const authController = require('../controllers/authController');
+const authController = require('../controllers/authController'); // ✅ CORRECT IMPORT
 const { authenticate } = require('../middleware/auth');
 const { validateUserRegistration, validateOTPVerification, validateLogin } = require('../middleware/validation');
 
@@ -125,6 +177,11 @@ router.post('/verify-otp', validateOTPVerification, authController.verifyOTP);
 // @desc    Resend OTP to email
 // @access  Public
 router.post('/resend-otp', authController.resendOTP);
+
+// @route   POST /api/auth/recover-tourist-id
+// @desc    Recover Tourist ID via email
+// @access  Public
+router.post('/recover-tourist-id', authController.recoverTouristId); // ✅ CORRECT REFERENCE
 
 // @route   POST /api/auth/login
 // @desc    Login with Tourist ID
@@ -152,4 +209,3 @@ router.post('/refresh', authenticate, authController.refreshToken);
 router.post('/logout', authenticate, authController.logout);
 
 module.exports = router;
-
