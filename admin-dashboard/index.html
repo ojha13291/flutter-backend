@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tourist Safety Monitoring Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+    <script
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBMrl1_mC1ZAXdMYHAlQvCREg1o5wmrULE&libraries=visualization"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        :root {
+            --primary: 99, 102, 241; /* indigo-500 */
+            --primary-dark: 79, 70, 229; /* indigo-600 */
+            --secondary: 168, 85, 247; /* purple-500 */
+            --success: 34, 197, 94; /* green-500 */
+            --warning: 245, 158, 11; /* amber-500 */
+            --error: 239, 68, 68; /* red-500 */
+            --surface: 15, 23, 42; /* slate-900 */
+            --surface-light: 30, 41, 59; /* slate-800 */
+            --surface-lighter: 51, 65, 85; /* slate-700 */
+            --text-primary: 248, 250, 252; /* slate-50 */
+            --text-secondary: 148, 163, 184; /* slate-400 */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, rgb(15, 23, 42) 0%, rgb(30, 41, 59) 100%);
+            color: rgb(var(--text-primary));
+            font-weight: 400;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            height: calc(100vh - 80px);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .glass-card-light {
+            background: rgba(51, 65, 85, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .status-indicator {
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .connection-connected { color: rgb(var(--success)); }
+        .connection-connecting { color: rgb(var(--warning)); }
+        .connection-error { color: rgb(var(--error)); }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            border-radius: 1rem;
+        }
+
+        .alert-card {
+            animation: alertPulse 2s ease-in-out infinite;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.2));
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        @keyframes alertPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.9; }
+        }
+
+        .blinking {
+            animation: blink 1.5s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--primary-dark)));
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, rgb(var(--primary-dark)), rgb(67, 56, 202));
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(var(--primary), 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, rgb(var(--secondary)), rgb(147, 51, 234));
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background: linear-gradient(135deg, rgb(147, 51, 234), rgb(126, 34, 206));
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(var(--secondary), 0.4);
+        }
+
+        .modal-backdrop {
+            backdrop-filter: blur(8px);
+            background: rgba(0, 0, 0, 0.6);
+        }
+
+        .modal-panel {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(51, 65, 85, 0.9));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .risk-safe { 
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.3));
+            color: rgb(34, 197, 94);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .risk-low { 
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.3));
+            color: rgb(245, 158, 11);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .risk-medium { 
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(234, 88, 12, 0.3));
+            color: rgb(249, 115, 22);
+            border: 1px solid rgba(249, 115, 22, 0.3);
+        }
+
+        .risk-high { 
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.3));
+            color: rgb(239, 68, 68);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .risk-critical { 
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.3), rgba(185, 28, 28, 0.4));
+            color: rgb(220, 38, 38);
+            border: 1px solid rgba(220, 38, 38, 0.4);
+            animation: criticalPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes criticalPulse {
+            0%, 100% { box-shadow: 0 0 10px rgba(220, 38, 38, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.6); }
+        }
+
+        .role-card {
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, rgba(51, 65, 85, 0.6), rgba(71, 85, 105, 0.4));
+        }
+
+        .role-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(135deg, rgba(71, 85, 105, 0.7), rgba(100, 116, 139, 0.5));
+        }
+
+        .tourist-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .tourist-card:hover {
+            transform: translateY(-1px);
+            background: rgba(71, 85, 105, 0.3);
+        }
+
+        .tourist-card.selected {
+            background: linear-gradient(135deg, rgba(var(--primary), 0.2), rgba(var(--primary-dark), 0.3));
+            border: 1px solid rgba(var(--primary), 0.4);
+        }
+
+        .header-glass {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .scroll-gradient {
+            mask-image: linear-gradient(to bottom, black 90%, transparent);
+            -webkit-mask-image: linear-gradient(to bottom, black 90%, transparent);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app" class="h-screen">
+        <!-- Login Screen -->
+        <div id="login-screen" class="flex flex-col items-center justify-center h-full p-4">
+            <div class="text-center mb-10">
+                <div class="mb-6 flex justify-center">
+                    <div class="p-4 rounded-2xl glass-card">
+                        <i data-lucide="shield-check" class="w-16 h-16 text-indigo-400"></i>
+                    </div>
+                </div>
+                <h1 class="text-5xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                    Smart Tourist Monitoring
+                </h1>
+                <p class="text-xl text-slate-300">Advanced real-time safety monitoring platform</p>
+            </div>
+
+            <div class="w-full max-w-md">
+                <div id="role-selection" class="space-y-4">
+                    <button onclick="showLogin('police')"
+                        class="role-card w-full text-left p-6 glass-card rounded-2xl flex items-center space-x-4 transition-all duration-300">
+                        <div class="p-3 bg-blue-500/20 rounded-xl">
+                            <i data-lucide="shield" class="text-blue-400 w-8 h-8"></i>
+                        </div>
+                        <div>
+                            <h2 class="font-semibold text-xl text-slate-100">Police / Law Enforcement</h2>
+                            <p class="text-sm text-slate-400">Real-time tracking and emergency response</p>
+                        </div>
+                    </button>
+                    <button onclick="showLogin('doctor')"
+                        class="role-card w-full text-left p-6 glass-card rounded-2xl flex items-center space-x-4 transition-all duration-300">
+                        <div class="p-3 bg-green-500/20 rounded-xl">
+                            <i data-lucide="stethoscope" class="text-green-400 w-8 h-8"></i>
+                        </div>
+                        <div>
+                            <h2 class="font-semibold text-xl text-slate-100">Medical Personnel</h2>
+                            <p class="text-sm text-slate-400">Medical histories and health monitoring</p>
+                        </div>
+                    </button>
+                </div>
+
+                <form id="login-form" class="hidden mt-8 space-y-6 glass-card p-8 rounded-2xl"
+                    onsubmit="handleLogin(event)">
+                    <div class="text-center mb-6">
+                        <h2 id="login-title" class="text-3xl font-bold text-slate-100"></h2>
+                        <p class="text-slate-400 mt-2">Enter your credentials to continue</p>
+                    </div>
+                    
+                    <div id="police-fields" class="hidden space-y-4">
+                        <div class="relative">
+                            <i data-lucide="badge" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5"></i>
+                            <input id="police-id"
+                                class="w-full pl-12 pr-4 py-4 bg-slate-800/50 border border-slate-600 rounded-xl text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                                type="text" placeholder="Badge ID (police01)" required>
+                        </div>
+                    </div>
+                    <div id="doctor-fields" class="hidden space-y-4">
+                        <div class="relative">
+                            <i data-lucide="user-check" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5"></i>
+                            <input id="doctor-id"
+                                class="w-full pl-12 pr-4 py-4 bg-slate-800/50 border border-slate-600 rounded-xl text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                                type="text" placeholder="Medical License ID (doctor01)" required>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <i data-lucide="lock" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5"></i>
+                        <input id="password"
+                            class="w-full pl-12 pr-4 py-4 bg-slate-800/50 border border-slate-600 rounded-xl text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                            type="password" placeholder="Password (password)" required>
+                    </div>
+                    
+                    <p id="login-error" class="text-red-400 text-sm text-center"></p>
+                    
+                    <div class="flex items-center gap-4 pt-4">
+                        <button type="button" onclick="showRoles()"
+                            class="flex-1 py-4 px-6 text-center bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition-all duration-300">
+                            Back
+                        </button>
+                        <button id="login-button" type="submit"
+                            class="flex-1 py-4 px-6 text-center btn-primary rounded-xl font-semibold">
+                            Sign In
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Dashboard Screen -->
+        <div id="dashboard-screen" class="hidden h-full flex flex-col">
+            <header class="header-glass p-4 flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-100">Tourist Safety Dashboard</h1>
+                    <p id="dashboard-role" class="text-sm text-slate-400"></p>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div id="connection-status" class="flex items-center gap-3 px-4 py-2 glass-card-light rounded-xl">
+                        <span class="status-indicator w-3 h-3 rounded-full bg-red-400"></span>
+                        <span class="text-sm font-medium">Disconnected</span>
+                    </div>
+                    <button onclick="handleLogout()"
+                        class="flex items-center gap-2 px-5 py-2.5 glass-card-light hover:bg-slate-600/50 rounded-xl font-semibold transition-all duration-300">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </header>
+
+            <main class="flex-grow p-6 dashboard-grid">
+                <!-- Left Column: Map -->
+                <div class="glass-card rounded-2xl overflow-hidden">
+                    <div id="map"></div>
+                </div>
+
+                <!-- Right Column: Lists -->
+                <div class="flex flex-col gap-6 overflow-hidden">
+                    <!-- Police: SOS Alerts -->
+                    <div id="police-sos-alerts" class="glass-card rounded-2xl p-6 hidden">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="p-2 bg-red-500/20 rounded-lg">
+                                <i data-lucide="siren" class="text-red-400 w-5 h-5"></i>
+                            </div>
+                            <h2 class="font-bold text-xl text-slate-100">Active SOS Alerts</h2>
+                        </div>
+                        <div id="sos-list" class="space-y-3 max-h-60 overflow-y-auto scroll-gradient">
+                            <p class="text-slate-400 text-sm">No active SOS alerts.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Doctor: Medical Alerts -->
+                    <div id="doctor-medical-alerts" class="glass-card rounded-2xl p-6 hidden">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="p-2 bg-green-500/20 rounded-lg">
+                                <i data-lucide="activity" class="text-green-400 w-5 h-5"></i>
+                            </div>
+                            <h2 class="font-bold text-xl text-slate-100">Medical Emergencies</h2>
+                        </div>
+                        <div id="medical-list" class="space-y-3 max-h-60 overflow-y-auto scroll-gradient">
+                            <p class="text-slate-400 text-sm">No active medical emergencies.</p>
+                        </div>
+                    </div>
+
+                    <!-- Tourist List -->
+                    <div class="glass-card rounded-2xl p-6 flex-grow flex flex-col">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="p-2 bg-blue-500/20 rounded-lg">
+                                <i data-lucide="users" class="text-blue-400 w-5 h-5"></i>
+                            </div>
+                            <h2 class="font-bold text-xl text-slate-100">
+                                Live Tourists 
+                                <span class="inline-flex items-center justify-center w-8 h-8 ml-2 text-sm font-bold bg-indigo-500 text-white rounded-full">
+                                    <span id="tourist-count">0</span>
+                                </span>
+                            </h2>
+                        </div>
+                        <div id="tourist-list" class="space-y-3 overflow-y-auto flex-grow scroll-gradient">
+                            <p class="text-slate-400 text-sm">Waiting for tourist data...</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Tourist Details Modal -->
+        <div id="tourist-modal" class="hidden fixed inset-0 z-50">
+            <div id="tourist-modal-backdrop" class="absolute inset-0 modal-backdrop" onclick="closeTouristModal()"></div>
+            <div class="relative flex items-center justify-center min-h-screen p-4">
+                <div id="tourist-modal-panel"
+                    class="modal-panel rounded-3xl w-full max-w-4xl transform scale-95 opacity-0 transition-all duration-300">
+                    <div class="p-8 border-b border-slate-700/50 flex justify-between items-center">
+                        <div>
+                            <h2 id="modal-tourist-name" class="text-3xl font-bold text-slate-100"></h2>
+                            <p id="modal-tourist-id" class="font-mono text-sm text-slate-400 mt-1"></p>
+                        </div>
+                        <button onclick="closeTouristModal()" 
+                            class="p-3 rounded-2xl glass-card-light hover:bg-slate-600/50 transition-all duration-300">
+                            <i data-lucide="x" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+                    <div id="modal-content" class="p-8 max-h-[70vh] overflow-y-auto scroll-gradient">
+                        <!-- Detailed content will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- CONFIG & STATE ---
+        const VITE_API_URL = 'http://localhost:5000/api';
+        const VITE_SOCKET_URL = 'http://localhost:5000';
+
+        let state = {
+            socket: null, map: null, markers: {}, token: null, user: null,
+            tourists: {}, activeAlerts: {}, selectedTouristId: null,
+            connectionHealthCheckInterval: null,
+        };
+
+        const ui = {
+            loginScreen: document.getElementById('login-screen'),
+            dashboardScreen: document.getElementById('dashboard-screen'),
+            roleSelection: document.getElementById('role-selection'),
+            loginForm: document.getElementById('login-form'),
+            loginTitle: document.getElementById('login-title'),
+            policeFields: document.getElementById('police-fields'),
+            doctorFields: document.getElementById('doctor-fields'),
+            loginButton: document.getElementById('login-button'),
+            loginError: document.getElementById('login-error'),
+            dashboardRole: document.getElementById('dashboard-role'),
+            connectionStatus: document.getElementById('connection-status'),
+            mapElement: document.getElementById('map'),
+            touristList: document.getElementById('tourist-list'),
+            touristCount: document.getElementById('tourist-count'),
+            policeSosAlerts: document.getElementById('police-sos-alerts'),
+            doctorMedicalAlerts: document.getElementById('doctor-medical-alerts'),
+            sosList: document.getElementById('sos-list'),
+            medicalList: document.getElementById('medical-list'),
+            touristModal: document.getElementById('tourist-modal'),
+            touristModalBackdrop: document.getElementById('tourist-modal-backdrop'),
+            touristModalPanel: document.getElementById('tourist-modal-panel'),
+            modalTouristName: document.getElementById('modal-tourist-name'),
+            modalTouristId: document.getElementById('modal-tourist-id'),
+            modalContent: document.getElementById('modal-content'),
+        };
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const token = localStorage.getItem('authToken');
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (token && user) {
+                state.token = token;
+                state.user = user;
+                initializeApp();
+            }
+        });
+
+        async function initializeApp() {
+            if (!state.token) {
+                console.error('No authentication token found');
+                showLoginScreen();
+                return;
+            }
+
+            console.log('🚀 Initializing app with user:', state.user?.name);
+            showDashboard(state.user.role);
+            initMap();
+
+            connectSocket();
+            startConnectionHealthCheck();
+
+            setTimeout(async () => {
+                await fetchInitialData();
+            }, 1000);
+        }
+
+        function initMap() {
+            if (state.map) return;
+            const initialCenter = { lat: 20.5937, lng: 78.9629 };
+            state.map = new google.maps.Map(ui.mapElement, {
+                zoom: 5,
+                center: initialCenter,
+                mapId: 'SMART_TOURIST_MAP',
+                styles: [
+                    {
+                        "featureType": "all",
+                        "elementType": "geometry",
+                        "stylers": [{"color": "#212121"}]
+                    },
+                    {
+                        "featureType": "all",
+                        "elementType": "labels.icon",
+                        "stylers": [{"visibility": "off"}]
+                    },
+                    {
+                        "featureType": "all",
+                        "elementType": "labels.text.fill",
+                        "stylers": [{"saturation": 36}, {"color": "#000000"}, {"lightness": 40}]
+                    },
+                    {
+                        "featureType": "all",
+                        "elementType": "labels.text.stroke",
+                        "stylers": [{"visibility": "on"}, {"color": "#000000"}, {"lightness": 16}]
+                    },
+                    {
+                        "featureType": "administrative",
+                        "elementType": "geometry.fill",
+                        "stylers": [{"color": "#000000"}, {"lightness": 20}]
+                    },
+                    {
+                        "featureType": "administrative",
+                        "elementType": "geometry.stroke",
+                        "stylers": [{"color": "#000000"}, {"lightness": 17}, {"weight": 1.2}]
+                    }
+                ]
+            });
+        }
+
+        // --- AUTHENTICATION ---
+        function showLogin(role) {
+            state.userRole = role;
+            ui.roleSelection.classList.add('hidden');
+            ui.loginForm.classList.remove('hidden');
+            ui.loginError.textContent = '';
+
+            if (role === 'police') {
+                ui.loginTitle.textContent = 'Police Login';
+                ui.policeFields.classList.remove('hidden');
+                ui.doctorFields.classList.add('hidden');
+                document.getElementById('police-id').required = true;
+                document.getElementById('doctor-id').required = false;
+            } else {
+                ui.loginTitle.textContent = 'Doctor Login';
+                ui.doctorFields.classList.remove('hidden');
+                ui.policeFields.classList.add('hidden');
+                document.getElementById('doctor-id').required = true;
+                document.getElementById('police-id').required = false;
+            }
+        }
+
+        function showRoles() {
+            ui.roleSelection.classList.remove('hidden');
+            ui.loginForm.classList.add('hidden');
+        }
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            ui.loginError.textContent = '';
+            const password = document.getElementById('password').value;
+            const id = (state.userRole === 'police')
+                ? document.getElementById('police-id').value
+                : document.getElementById('doctor-id').value;
+            let user = null;
+            if (state.userRole === 'police' && id === 'police01' && password === 'password') {
+                user = { name: 'Officer Smith', role: 'police' };
+            } else if (state.userRole === 'doctor' && id === 'doctor01' && password === 'password') {
+                user = { name: 'Dr. Jones', role: 'doctor' };
+            }
+            if (user) {
+                const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImRldmVsb3BtZW50LWFkbWluIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjE2NDI5MDIyfQ.m8c2_t-3_p-R_a-n_d-O_m-S_t-r_I_n-G";
+                state.token = mockToken;
+                state.user = user;
+                localStorage.setItem('authToken', state.token);
+                localStorage.setItem('user', JSON.stringify(state.user));
+                initializeApp();
+            } else {
+                ui.loginError.textContent = 'Invalid credentials. Please try again.';
+            }
+        }
+
+        function handleLogout() {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            if (state.socket) state.socket.disconnect();
+            if (state.connectionHealthCheckInterval) {
+                clearInterval(state.connectionHealthCheckInterval);
+                state.connectionHealthCheckInterval = null;
+            }
+            state = { ...state, token: null, user: null, tourists: {}, activeAlerts: {}, selectedTouristId: null };
+            Object.values(state.markers).forEach(marker => marker.setMap(null));
+            state.markers = {};
+            showLoginScreen();
+        }
+
+        // --- UI & DATA ---
+        function showDashboard(role) {
+            ui.loginScreen.classList.add('hidden');
+            ui.dashboardScreen.classList.remove('hidden');
+            ui.dashboardRole.textContent = `Role: ${role.charAt(0).toUpperCase() + role.slice(1)} Officer`;
+            if (role === 'police') {
+                ui.policeSosAlerts.classList.remove('hidden');
+                ui.doctorMedicalAlerts.classList.add('hidden');
+            } else if (role === 'doctor') {
+                ui.doctorMedicalAlerts.classList.remove('hidden');
+                ui.policeSosAlerts.classList.add('hidden');
+            }
+        }
+
+        function showLoginScreen() {
+            ui.loginScreen.classList.remove('hidden');
+            ui.dashboardScreen.classList.add('hidden');
+            showRoles();
+        }
+
+        async function fetchInitialData() {
+            try {
+                const touristsRes = await fetch(`${VITE_API_URL}/users`, {
+                    headers: { 'Authorization': `Bearer ${state.token}` }
+                });
+
+                if (touristsRes.ok) {
+                    const response = await touristsRes.json();
+                    if (response.success && response.data && response.data.users) {
+                        const activeTourists = response.data.users;
+                        activeTourists.forEach(tourist => {
+                            if (tourist.lastKnownLocation && tourist.lastKnownLocation.latitude) {
+                                handleLocationUpdate({
+                                    touristId: tourist.touristId,
+                                    latitude: tourist.lastKnownLocation.latitude,
+                                    longitude: tourist.lastKnownLocation.longitude,
+                                    timestamp: tourist.lastKnownLocation.timestamp,
+                                    riskLevel: tourist.safetyStatus || 'SAFE',
+                                    name: tourist.fullName,
+                                });
+                            }
+                        });
+                    }
+                }
+
+                if (state.user.role === 'police') {
+                    const sosRes = await fetch(`${VITE_API_URL}/sos/active`, {
+                        headers: { 'Authorization': `Bearer ${state.token}` }
+                    });
+                    if (sosRes.ok) {
+                        const response = await sosRes.json();
+                        if (response.success && response.data && response.data.alerts) {
+                            response.data.alerts.forEach(handleSosAlert);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Could not fetch initial data:", error);
+            }
+        }
+
+        // --- ENHANCED SOCKET.IO CONNECTION ---
+        function connectSocket() {
+            if (!state.token) return;
+
+            updateConnectionStatus('connecting', 'Connecting...');
+
+            state.socket = io(VITE_SOCKET_URL, {
+                auth: { token: state.token },
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                timeout: 10000,
+                forceNew: false,
+            });
+
+            state.socket.on('connect', () => {
+                console.log('✅ Socket connected:', state.socket.id);
+                updateConnectionStatus('connected', 'Connected');
+            });
+
+            state.socket.on('connect_error', (error) => {
+                console.error('❌ Socket connection error:', error.message);
+                updateConnectionStatus('error', 'Connection Failed');
+                
+                if (error.message.includes('Authentication error')) {
+                    console.error('Authentication failed, redirecting to login...');
+                    setTimeout(() => {
+                        handleLogout();
+                    }, 2000);
+                }
+            });
+
+            state.socket.on('disconnect', (reason, details) => {
+                console.warn('🔌 Socket disconnected:', reason);
+                updateConnectionStatus('error', 'Disconnected');
+
+                if (reason === 'io server disconnect') {
+                    console.log('🔄 Server disconnected us, scheduling manual reconnect...');
+                    setTimeout(() => {
+                        if (state.socket && !state.socket.connected) {
+                            console.log('🔄 Attempting manual reconnect...');
+                            state.socket.connect();
+                        }
+                    }, 2000);
+                }
+            });
+
+            state.socket.io.on('reconnect_attempt', (attemptNumber) => {
+                console.log(`🔄 Reconnection attempt ${attemptNumber}/5`);
+                updateConnectionStatus('connecting', `Reconnecting... (${attemptNumber}/5)`);
+            });
+
+            state.socket.io.on('reconnect', (attemptNumber) => {
+                console.log('✅ Reconnected after', attemptNumber, 'attempts');
+                updateConnectionStatus('connected', 'Connected');
+                setTimeout(() => {
+                    fetchInitialData();
+                }, 500);
+            });
+
+            state.socket.io.on('reconnect_failed', () => {
+                console.error('❌ Failed to reconnect after all attempts');
+                updateConnectionStatus('error', 'Connection Lost');
+                
+                setTimeout(() => {
+                    if (state.socket && !state.socket.connected) {
+                        console.log('🔄 Starting fresh reconnection attempt...');
+                        updateConnectionStatus('connecting', 'Retrying...');
+                        state.socket.connect();
+                    }
+                }, 10000);
+            });
+
+            state.socket.on('ping', () => {
+                console.log('📡 Ping received from server');
+            });
+
+            state.socket.on('pong', (latency) => {
+                console.log(`📡 Pong received, latency: ${latency}ms`);
+            });
+
+            state.socket.on('touristLocationUpdate', handleLocationUpdate);
+            state.socket.on('emergencyAlert', handleSosAlert);
+            state.socket.on('anomalyDetected', handleAnomalyAlert);
+            state.socket.on('medicalAlert', handleMedicalAlert);
+        }
+
+        function updateConnectionStatus(status, message) {
+            const statusElement = ui.connectionStatus;
+            const indicator = statusElement.querySelector('.status-indicator');
+            const text = statusElement.querySelector('span:last-child');
+
+            indicator.className = `status-indicator w-3 h-3 rounded-full ${
+                status === 'connected' ? 'bg-green-400' :
+                status === 'connecting' ? 'bg-yellow-400' : 'bg-red-400'
+            }`;
+            
+            text.textContent = message;
+            text.className = `text-sm font-medium ${
+                status === 'connected' ? 'connection-connected' :
+                status === 'connecting' ? 'connection-connecting' : 'connection-error'
+            }`;
+        }
+
+        function startConnectionHealthCheck() {
+            if (state.connectionHealthCheckInterval) {
+                clearInterval(state.connectionHealthCheckInterval);
+            }
+
+            state.connectionHealthCheckInterval = setInterval(() => {
+                if (state.socket) {
+                    if (!state.socket.connected) {
+                        console.warn('⚠️ Socket appears disconnected, attempting reconnect...');
+                        updateConnectionStatus('connecting', 'Reconnecting...');
+                        
+                        try {
+                            state.socket.connect();
+                        } catch (error) {
+                            console.error('Failed to reconnect:', error);
+                            updateConnectionStatus('error', 'Connection Failed');
+                        }
+                    } else {
+                        if (typeof state.socket.emit === 'function') {
+                            try {
+                                state.socket.volatile.emit('ping');
+                            } catch (error) {
+                                console.warn('Ping failed:', error);
+                            }
+                        }
+                    }
+                } else {
+                    console.warn('⚠️ No socket instance, attempting to reconnect...');
+                    connectSocket();
+                }
+            }, 30000);
+        }
+
+        // --- EVENT HANDLERS ---
+        function handleLocationUpdate(data) {
+            const existingData = state.tourists[data.touristId] || {};
+            state.tourists[data.touristId] = { ...existingData, ...data, name: data.name || existingData.name };
+            updateTouristList();
+            updateMapMarker(state.tourists[data.touristId]);
+        }
+
+        function handleSosAlert(alertData) {
+            state.activeAlerts[alertData.sosId || alertData._id] = alertData;
+            updateAlertLists();
+
+            let tourist = state.tourists[alertData.touristId];
+            if (!tourist && alertData.location) {
+                tourist = {
+                    touristId: alertData.touristId,
+                    name: alertData.touristName || 'Unknown',
+                    latitude: alertData.location.latitude,
+                    longitude: alertData.location.longitude,
+                };
+                state.tourists[alertData.touristId] = tourist;
+                updateTouristList();
+            }
+
+            if (tourist) {
+                updateMapMarker({ ...tourist, isAlert: true });
+                panToLocation(tourist.latitude, tourist.longitude);
+            }
+        }
+
+        function handleAnomalyAlert(alertData) {
+            const tourist = state.tourists[alertData.touristId];
+            if (tourist) {
+                tourist.riskLevel = alertData.riskLevel;
+                tourist.lastAnomaly = alertData.anomalies[0] || { type: 'Unknown', severity: 'High' };
+                handleLocationUpdate(tourist);
+                panToLocation(tourist.latitude, tourist.longitude);
+            }
+        }
+
+        function handleMedicalAlert(alertData) { /* Logic for medical alerts */ }
+
+        // --- UI RENDERING ---
+        function updateTouristList() {
+            const touristIds = Object.keys(state.tourists);
+            ui.touristCount.textContent = touristIds.length;
+            if (touristIds.length === 0) {
+                ui.touristList.innerHTML = `<p class="text-slate-400 text-sm">No live tourists found.</p>`;
+                return;
+            }
+            ui.touristList.innerHTML = touristIds.map(id => {
+                const tourist = state.tourists[id];
+                const isSelected = state.selectedTouristId === id;
+                const riskColor = getRiskColor(tourist.riskLevel);
+                const hasAlert = Object.values(state.activeAlerts).some(a => a.touristId === id);
+                return `
+                    <div onclick="openTouristModal('${id}')" class="tourist-card p-4 rounded-xl flex justify-between items-center ${isSelected ? 'selected' : ''}">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold">
+                                ${tourist.name ? tourist.name.charAt(0).toUpperCase() : 'T'}
+                            </div>
+                            <div>
+                                <p class="font-semibold text-sm text-slate-100">${tourist.name || 'Unknown Tourist'}</p>
+                                <p class="font-mono text-xs text-slate-400">${id}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                             ${hasAlert ? '<div class="p-1 bg-red-500/20 rounded-lg"><i data-lucide="siren" class="text-red-400 w-4 h-4 blinking"></i></div>' : ''}
+                             <span class="text-xs font-semibold px-3 py-1.5 rounded-full ${riskColor}">${tourist.riskLevel || 'SAFE'}</span>
+                        </div>
+                    </div>`;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function updateAlertLists() {
+            const alerts = Object.values(state.activeAlerts);
+            const sosAlerts = alerts.filter(a => a.sosId || a.alertType === 'SOS');
+            if (sosAlerts.length > 0) {
+                ui.sosList.innerHTML = sosAlerts.map(alert => {
+                    const touristName = state.tourists[alert.touristId]?.name || alert.touristName || 'Unknown';
+                    return `
+                    <div class="alert-card p-4 rounded-xl cursor-pointer transition-all duration-300" onclick="openTouristModal('${alert.touristId}')">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="p-2 bg-red-500/30 rounded-lg">
+                                <i data-lucide="alert-triangle" class="text-red-300 w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold text-red-300">${alert.alertType || 'SOS'} - ${alert.severity}</p>
+                                <p class="text-sm text-slate-300">${touristName}</p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400">${new Date(alert.createdAt || alert.timestamp).toLocaleString()}</p>
+                    </div>`;
+                }).join('');
+            } else {
+                ui.sosList.innerHTML = `<p class="text-slate-400 text-sm">No active SOS alerts.</p>`;
+            }
+        }
+
+        function getRiskColor(riskLevel) {
+            switch (riskLevel?.toUpperCase()) {
+                case 'LOW': return 'risk-low';
+                case 'MEDIUM': return 'risk-medium';
+                case 'HIGH': return 'risk-high';
+                case 'CRITICAL': return 'risk-critical';
+                default: return 'risk-safe';
+            }
+        }
+
+        // --- MAP & MODAL ---
+        function updateMapMarker(tourist) {
+            if (!tourist.latitude || !tourist.longitude) return;
+            const position = { lat: tourist.latitude, lng: tourist.longitude };
+            const hasAlert = Object.values(state.activeAlerts).some(a => a.touristId === tourist.touristId);
+            let iconUrl = hasAlert
+                ? 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="#ef4444" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M5 21a1 1 0 0 1-1-1v-1a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1H5z"/><path d="M12 2v4"/><path d="m8 6 4-4 4 4"/></svg>')
+                : 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="#6366f1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg>');
+            
+            if (state.markers[tourist.touristId]) {
+                state.markers[tourist.touristId].setPosition(position);
+                state.markers[tourist.touristId].setIcon({ url: iconUrl, scaledSize: new google.maps.Size(hasAlert ? 40 : 32, hasAlert ? 40 : 32) });
+            } else {
+                state.markers[tourist.touristId] = new google.maps.Marker({ 
+                    position, 
+                    map: state.map, 
+                    icon: { url: iconUrl, scaledSize: new google.maps.Size(hasAlert ? 40 : 32, hasAlert ? 40 : 32) },
+                    animation: hasAlert ? google.maps.Animation.BOUNCE : null
+                });
+            }
+            state.markers[tourist.touristId].addListener('click', () => openTouristModal(tourist.touristId));
+        }
+
+        function panToLocation(latitude, longitude) {
+            if (state.map && latitude && longitude) {
+                state.map.panTo({ lat: latitude, lng: longitude });
+                state.map.setZoom(12);
+            }
+        }
+
+        async function openTouristModal(touristId) {
+            state.selectedTouristId = touristId;
+            updateTouristList();
+            try {
+                const res = await fetch(`${VITE_API_URL}/users/${touristId}`, {
+                    headers: { 'Authorization': `Bearer ${state.token}` }
+                });
+                if (!res.ok) throw new Error('Failed to fetch details');
+                const response = await res.json();
+
+                const touristDetails = response.data.user;
+
+                ui.modalTouristName.textContent = touristDetails.fullName || 'Unknown Tourist';
+                ui.modalTouristId.textContent = touristDetails.touristId || touristDetails._id;
+
+                let content = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Personal Information -->
+                    <div class="glass-card-light p-6 rounded-2xl">
+                        <h3 class="text-lg font-bold text-indigo-400 mb-4 flex items-center gap-2">
+                            <i data-lucide="user" class="w-5 h-5"></i>
+                            Personal Information
+                        </h3>
+                        <div class="space-y-4 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Nationality:</span>
+                                <span class="text-slate-200 font-medium">${touristDetails.nationality || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Age:</span>
+                                <span class="text-slate-200 font-medium">${touristDetails.age || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Gender:</span>
+                                <span class="text-slate-200 font-medium">${touristDetails.gender || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-400">Risk Level:</span>
+                                <span class="px-3 py-1 rounded-full text-xs font-bold ${getRiskColor(touristDetails.safetyStatus)}">${touristDetails.safetyStatus || 'SAFE'}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contact Information -->
+                    <div class="glass-card-light p-6 rounded-2xl">
+                        <h3 class="text-lg font-bold text-green-400 mb-4 flex items-center gap-2">
+                            <i data-lucide="phone" class="w-5 h-5"></i>
+                            Contact Information
+                        </h3>
+                        <div class="space-y-4 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Email:</span>
+                                <span class="text-slate-200 font-medium break-all">${touristDetails.email || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Phone:</span>
+                                <span class="text-slate-200 font-medium">${touristDetails.mobileNumber || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Emergency Contact -->
+                <div class="glass-card-light p-6 rounded-2xl mt-6">
+                    <h3 class="text-lg font-bold text-red-400 mb-4 flex items-center gap-2">
+                        <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                        Emergency Contact
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                        <div>
+                            <span class="text-slate-400 block mb-1">Name:</span>
+                            <span class="text-slate-200 font-medium">${touristDetails.emergencyContactName || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block mb-1">Phone:</span>
+                            <span class="text-slate-200 font-medium">${touristDetails.emergencyContactPhone || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block mb-1">Relation:</span>
+                            <span class="text-slate-200 font-medium">${touristDetails.emergencyContactRelation || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+                // Add location info if available
+                if (touristDetails.lastKnownLocation && touristDetails.lastKnownLocation.latitude) {
+                    content += `
+                    <div class="glass-card-light p-6 rounded-2xl mt-6">
+                        <h3 class="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2">
+                            <i data-lucide="map-pin" class="w-5 h-5"></i>
+                            Last Known Location
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                            <div>
+                                <span class="text-slate-400 block mb-1">Coordinates:</span>
+                                <span class="text-slate-200 font-mono text-xs">${touristDetails.lastKnownLocation.latitude.toFixed(6)}, ${touristDetails.lastKnownLocation.longitude.toFixed(6)}</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block mb-1">Last Updated:</span>
+                                <span class="text-slate-200 font-medium">${new Date(touristDetails.lastKnownLocation.timestamp).toLocaleString()}</span>
+                            </div>
+                        </div>
+                        ${touristDetails.lastKnownLocation.address ? `
+                        <div class="mt-4">
+                            <span class="text-slate-400 block mb-1">Address:</span>
+                            <span class="text-slate-200 font-medium">${touristDetails.lastKnownLocation.address}</span>
+                        </div>` : ''}
+                    </div>`;
+                }
+
+                // Add travel info if available
+                if (touristDetails.currentDestination || touristDetails.hotelAddress) {
+                    content += `
+                    <div class="glass-card-light p-6 rounded-2xl mt-6">
+                        <h3 class="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2">
+                            <i data-lucide="plane" class="w-5 h-5"></i>
+                            Travel Information
+                        </h3>
+                        <div class="space-y-4 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Destination:</span>
+                                <span class="text-slate-200 font-medium">${touristDetails.currentDestination || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Hotel:</span>
+                                <span class="text-slate-200 font-medium">${touristDetails.hotelAddress || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Insurance:</span>
+                                <span class="text-slate-200 font-medium">${touristDetails.insuranceCompany || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+
+                // Medical info for doctors
+                if (state.user.role === 'doctor') {
+                    content += `
+                    <div class="glass-card-light p-6 rounded-2xl mt-6 border border-red-500/20">
+                        <h3 class="text-lg font-bold text-red-400 mb-4 flex items-center gap-2">
+                            <i data-lucide="heart-pulse" class="w-5 h-5"></i>
+                            Medical Information
+                        </h3>
+                        <div class="space-y-4 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Blood Group:</span>
+                                <span class="text-slate-200 font-bold">${touristDetails.bloodGroup || 'N/A'}</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block mb-2">Allergies:</span>
+                                <div class="flex flex-wrap gap-2">
+                                    ${(touristDetails.allergies && touristDetails.allergies.length > 0) ? 
+                                        touristDetails.allergies.map(allergy => `<span class="px-2 py-1 bg-red-500/20 text-red-300 rounded-lg text-xs">${allergy}</span>`).join(' ') : 
+                                        '<span class="text-slate-200">None reported</span>'
+                                    }
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block mb-2">Medical Conditions:</span>
+                                <div class="flex flex-wrap gap-2">
+                                    ${(touristDetails.medicalConditions && touristDetails.medicalConditions.length > 0) ? 
+                                        touristDetails.medicalConditions.map(c => `<span class="px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded-lg text-xs">${c.condition || c}</span>`).join(' ') : 
+                                        '<span class="text-slate-200">None reported</span>'
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+
+                ui.modalContent.innerHTML = content;
+            } catch (error) {
+                ui.modalContent.innerHTML = `
+                    <div class="glass-card-light p-6 rounded-2xl text-center">
+                        <i data-lucide="alert-triangle" class="w-12 h-12 text-red-400 mx-auto mb-4"></i>
+                        <p class="text-red-400 font-medium">Could not load tourist details</p>
+                        <p class="text-slate-400 text-sm mt-2">Error: ${error.message}</p>
+                    </div>`;
+                console.error("Modal fetch error:", error);
+            }
+
+            ui.touristModal.classList.remove('hidden');
+            setTimeout(() => {
+                ui.touristModalBackdrop.classList.remove('opacity-0');
+                ui.touristModalPanel.classList.remove('scale-95', 'opacity-0');
+                ui.touristModalPanel.classList.add('scale-100', 'opacity-100');
+            }, 10);
+            lucide.createIcons();
+        }
+
+        function closeTouristModal() {
+            state.selectedTouristId = null;
+            updateTouristList();
+            ui.touristModalBackdrop.classList.add('opacity-0');
+            ui.touristModalPanel.classList.remove('scale-100', 'opacity-100');
+            ui.touristModalPanel.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                ui.touristModal.classList.add('hidden');
+            }, 300);
+        }
+
+        // Initialize Lucide icons on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+
+    </script>
+
+</body>
+
+</html>

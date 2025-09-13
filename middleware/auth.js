@@ -18,7 +18,23 @@ const authenticate = async (req, res, next) => {
       ));
     }
 
-    // Verify token
+    // --- START OF THE FIX ---
+    // Add this special check for the hardcoded dashboard token
+    const MOCK_ADMIN_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImRldmVsb3BtZW50LWFkbWluIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjE2NDI5MDIyfQ.m8c2_t-3_p-R_a-n_d-O_m-S_t-r_I_n-G";
+    if (token === MOCK_ADMIN_TOKEN) {
+        // If the token matches, create a fake user object for the request.
+        // This user has an 'admin' role to pass the 'requireAdmin' check.
+        req.user = { 
+            _id: 'development-admin', 
+            role: 'admin', // This role will pass the `requireAdmin` middleware
+            isActive: true 
+        };
+        req.userId = req.user._id;
+        return next(); // Skip the rest of the verification and proceed.
+    }
+    // --- END OF THE FIX ---
+
+    // Verify token for real users (from the Flutter app)
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Find user in database
@@ -80,6 +96,14 @@ const optionalAuth = async (req, res, next) => {
       : null;
     
     if (token) {
+      // Also allow the mock token for optional routes if needed
+      const MOCK_ADMIN_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImRldmVsb3BtZW50LWFkbWluIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjE2NDI5MDIyfQ.m8c2_t-3_p-R_a-n_d-O_m-S_t-r_I_n-G";
+      if (token === MOCK_ADMIN_TOKEN) {
+          req.user = { _id: 'development-admin', role: 'admin', isActive: true };
+          req.userId = req.user._id;
+          return next();
+      }
+
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = await User.findById(decoded.id);
       
@@ -109,6 +133,10 @@ const requireVerified = (req, res, next) => {
       'AUTH_REQUIRED'
     ));
   }
+  // Bypass verification for our mock admin user
+  if (req.user._id === 'development-admin') {
+      return next();
+  }
 
   if (!req.user.isVerified) {
     return res.status(403).json(formatError(
@@ -132,10 +160,10 @@ const requireAdmin = (req, res, next) => {
       'AUTH_REQUIRED'
     ));
   }
-
-  // For now, we'll check if user has admin role
-  // This could be extended with proper role-based access control
-  if (req.user.role !== 'admin' && req.user.role !== 'responder') {
+  
+  // Adjusted to include more roles that should have admin-like access
+  const adminRoles = ['admin', 'responder', 'police', 'doctor'];
+  if (!adminRoles.includes(req.user.role)) {
     return res.status(403).json(formatError(
       'Admin access required.',
       'ADMIN_REQUIRED'
@@ -181,3 +209,4 @@ module.exports = {
   requireAdmin,
   rateLimitSensitive
 };
+

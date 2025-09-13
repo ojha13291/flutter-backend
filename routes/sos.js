@@ -23,7 +23,9 @@
 const express = require('express');
 const router = express.Router();
 const sosController = require('../controllers/sosController');
-const { authenticate } = require('../middleware/auth');
+// const { authenticate } = require('../middleware/auth');
+const { authenticate, requireAdmin } = require('../middleware/auth');
+
 
 // @route   POST /api/sos/alert
 // @desc    Create SOS emergency alert (matches Flutter SOS button)
@@ -43,6 +45,9 @@ router.delete('/:sosId/cancel', authenticate, sosController.cancelSOSAlert);
 
 // @route   GET /api/sos/history
 // @desc    Get user's SOS history
-router.get('/', authenticate, sosController.getSOSHistory);
+// router.get('/', authenticate, sosController.getSOSHistory);
+// Add this route for the dashboard to fetch active SOS alerts
+router.get('/active', authenticate, requireAdmin, sosController.getActiveSOSAlerts);
+
 
 module.exports = router;
