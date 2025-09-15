@@ -27,17 +27,20 @@ const app = express();
 const server = http.createServer(app);
 
 // Initialize Socket.IO
+// AWS Application Load Balancer
 const io = socketIo(server, {
     cors: {
-        origin: process.env.NODE_ENV === 'production' 
-            ? process.env.FRONTEND_URL 
-            : "http://127.0.0.1:5500",
+        origin:[process.env.FRONTEND_URL,"http://54.252.254.166"] ,
         methods: ["GET", "POST"],
         credentials: true
     },
+    // AWS-specific configuration
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
     pingTimeout: 60000,
     pingInterval: 25000
 });
+
 
 // Database connection
 const connectDB = require('./config/database');
@@ -90,8 +93,8 @@ const limiter = rateLimit({
 
 // --- START: CORRECTED SECURITY MIDDLEWARE ---
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? process.env.FRONTEND_URL 
+    origin: process.env.NODE_ENV === 'production'
+        ? process.env.FRONTEND_URL
         : "http://127.0.0.1:5500",
     credentials: true
 }));

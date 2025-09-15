@@ -92,6 +92,9 @@ const detectAnomalies = catchAsync(async (req, res) => {
   }
 });
 
+// Add this function to controllers/anomalyController.js
+
+
 // Get anomaly history
 const getAnomalyHistory = catchAsync(async (req, res) => {
   const { limit = 10, page = 1, severity } = req.query;
@@ -131,9 +134,9 @@ const getAnomalyStatus = catchAsync(async (req, res) => {
   const criticalCount = recentAnomalies.filter(a => a.severity === 'CRITICAL').length;
   const highCount = recentAnomalies.filter(a => a.severity === 'HIGH').length;
 
-  const overallStatus = criticalCount > 0 ? 'CRITICAL' : 
-                       highCount > 2 ? 'HIGH' : 
-                       recentAnomalies.length > 5 ? 'MEDIUM' : 'SAFE';
+  const overallStatus = criticalCount > 0 ? 'CRITICAL' :
+    highCount > 2 ? 'HIGH' :
+      recentAnomalies.length > 5 ? 'MEDIUM' : 'SAFE';
 
   res.status(200).json(formatSuccess({
     overallStatus,
@@ -171,10 +174,10 @@ async function autoTriggerSOS(userId, touristId, latitude, longitude, anomalyRes
   try {
     // Auto-create SOS alert for critical anomalies
     const description = `AUTO-SOS: Multiple critical anomalies detected - ${anomalyResult.anomalies.map(a => a.type).join(', ')}`;
-    
+
     // This would call your existing SOS creation logic
     logger.error('AUTO-SOS triggered due to anomalies:', { touristId, anomalies: anomalyResult.anomalies });
-    
+
   } catch (error) {
     logger.error('Auto-SOS trigger failed:', error);
   }
@@ -183,7 +186,7 @@ async function autoTriggerSOS(userId, touristId, latitude, longitude, anomalyRes
 async function sendAnomalyNotifications(user, anomalyResult) {
   try {
     const message = `ALERT: Unusual activity detected for ${user.fullName}. Risk Level: ${anomalyResult.riskLevel}. Please check immediately.`;
-    
+
     await notificationService.sendEmergencyNotification({
       type: 'EMAIL',
       recipient: user.emergencyContactPhone, // Assuming email for emergency contact
@@ -196,9 +199,33 @@ async function sendAnomalyNotifications(user, anomalyResult) {
   }
 }
 
+const resolveAnomaly = catchAsync(async (req, res) => {
+  const { anomalyId } = req.params;
+  const { resolved = true, resolvedBy } = req.body;
+
+  const anomaly = await AnomalyAlert.findById(anomalyId);
+  if (!anomaly) {
+    return res.status(404).json(formatError('Anomaly not found', 'ANOMALY_NOT_FOUND'));
+  }
+
+  anomaly.resolved = resolved;
+  anomaly.resolvedAt = resolved ? new Date() : null;
+  anomaly.resolvedBy = resolvedBy || req.user.role || 'admin';
+
+  await anomaly.save();
+
+  res.status(200).json(formatSuccess({
+    anomalyId: anomaly._id,
+    resolved: anomaly.resolved,
+    resolvedAt: anomaly.resolvedAt,
+    message: 'Anomaly resolved successfully'
+  }));
+});
+
+
 function getRecommendations(anomalyResult) {
   const recommendations = [];
-  
+
   anomalyResult.anomalies.forEach(anomaly => {
     switch (anomaly.type) {
       case 'COORDINATE_ANOMALY':
@@ -226,8 +253,38 @@ function getRecommendations(anomalyResult) {
   return recommendations;
 }
 
+// Add this function to controllers/anomalyController.js
+
+const getAllActiveAnomalies = catchAsync(async (req, res) => {
+    const { limit = 50, page = 1, severity } = req.query;
+    
+    let filter = { resolved: false };
+    if (severity) filter.severity = severity;
+
+    const anomalies = await AnomalyAlert.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .skip((parseInt(page) - 1) * parseInt(limit))
+        .populate('userId', 'fullName touristId');
+
+    const total = await AnomalyAlert.countDocuments(filter);
+
+    res.status(200).json(formatSuccess({
+        anomalies,
+        pagination: {
+            current: parseInt(page),
+            total: Math.ceil(total / parseInt(limit)),
+            count: anomalies.length,
+            totalRecords: total
+        }
+    }));
+});
+
+// Don't forget to export it
 module.exports = {
-  detectAnomalies,
-  getAnomalyHistory,
-  getAnomalyStatus
+    detectAnomalies,
+    getAnomalyHistory,
+    getAnomalyStatus,
+    resolveAnomaly,
+    getAllActiveAnomalies  // Add this line
 };

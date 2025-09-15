@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const anomalyController = require('../controllers/anomalyController');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireAdmin } = require('../middleware/auth');
 const { body } = require('express-validator');
 const { handleValidationErrors } = require('../middleware/validation');
 
@@ -26,9 +26,13 @@ router.post('/detect', authenticate, validateAnomalyDetection, anomalyController
 // @access  Private
 router.get('/history', authenticate, anomalyController.getAnomalyHistory);
 
+router.put('/:anomalyId/resolve', authenticate, requireAdmin, anomalyController.resolveAnomaly);
+
+
 // @route   GET /api/anomaly/status
 // @desc    Get current anomaly status for user
 // @access  Private
+router.get('/all-active', authenticate, requireAdmin, anomalyController.getAllActiveAnomalies);
 router.get('/status', authenticate, anomalyController.getAnomalyStatus);
 
 module.exports = router;

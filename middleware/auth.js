@@ -207,6 +207,6 @@ module.exports = {
   optionalAuth,
   requireVerified,
   requireAdmin,
-  rateLimitSensitive
+  rateLimitSensitive,
 };
 
